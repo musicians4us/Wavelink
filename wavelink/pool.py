@@ -170,7 +170,7 @@ class Node:
 
         return data, resp
 
-    async def get_tracks(self, cls: Type[PT], query: str) -> List[PT]:
+    async def get_tracks(self, cls: Type[PT], query: str, playlist_cls: Type[PLT]) -> List[PT]:
         """|coro|
 
         Search for and return a list of :class:`abc.Playable` for a given query.
@@ -210,6 +210,9 @@ class Node:
         if load_type is LoadType.track_loaded:
             track_data = data["tracks"][0]
             return [cls(track_data["track"], track_data["info"])]
+
+        if load_type is LoadType.playlist_loaded:
+            return playlist_cls(data)
 
         if load_type is not LoadType.search_result:
             raise LavalinkException("Track failed to load.")
@@ -290,7 +293,7 @@ class Node:
 
         return cls(identifier, data)
 
-    def get_player(self, guild: discord.Guild) -> Optional[Player]:
+    def get_player(self, guild: discord.Guild, *, channel=MISSING, cls=None) -> Optional[Player]:
         """Returns a :class:`Player` object playing in a specific :class:`discord.Guild`.
 
         Parameters
@@ -302,11 +305,16 @@ class Node:
         -------
         Optional[:class:`Player`]
         """
-        for player in self.players:
-            if player.guild == guild:
-                return player
-
-        return None
+        # player = None
+        for p in self.players:
+            if p.guild == guild:
+                return p
+        else:
+            if cls is None:
+                from .player import Player as cls
+            player = cls(client=self.bot, channel=channel, node=self, guild=guild)
+            player._connected = bool(guild.me in getattr(channel, 'members', []))
+            return player
 
     async def disconnect(self, *, force: bool = False) -> None:
         """Disconnect this Node and remove it from the NodePool.

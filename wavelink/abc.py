@@ -70,7 +70,21 @@ class Playable(metaclass=abc.ABCMeta):
         self.info: Dict[str, Any] = info
         self.length: float = info.get("length", 0) / 1000
         self.duration: float = self.length
-
+        self.is_stream: lambda: bool = lambda: info.get('isStream', False)
+        self.author: str = info.get('author', '')
+        self.uri: str = info.get('uri')
+        self.title: str = info.get('title', None)
+        if self.title == 'Unknown title':
+            self.title = self.uri.split('/')[-1].split('.')[0]
+    
+    @property
+    def thumbnail(self) -> Optional[str]:
+        if hasattr(self, 'identifier'):
+            return f"https://img.youtube.com/vi/{self.identifier}/hqdefault.jpg"
+    
+    thumb = thumbnail
+    
+        
 
 class Searchable(metaclass=abc.ABCMeta):
     @overload

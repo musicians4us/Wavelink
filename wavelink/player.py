@@ -26,8 +26,9 @@ import logging
 from typing import Any, Dict, Union, Optional
 
 import discord
-from discord.channel import VoiceChannel
+from discord.channel import VoiceChannel, StageChannel
 
+from .eqs import *
 from . import abc
 from .pool import Node, NodePool
 from .queue import WaitQueue
@@ -79,13 +80,15 @@ class Player(discord.VoiceProtocol):
         channel: VoiceChannel = MISSING,
         *,
         node: Node = MISSING,
+        guild: discord.Guild = MISSING,
     ):
         self.client: discord.Client = client
         self.channel: VoiceChannel = channel
-
+        
         if node is MISSING:
             node = NodePool.get_node()
         self.node: Node = node
+        self.id = len(node.players)
         self.node._players.append(self)
 
         self._voice_state: Dict[str, Any] = {}
@@ -95,15 +98,36 @@ class Player(discord.VoiceProtocol):
 
         self.volume: float = 100
         self._paused: bool = False
+        self._connected: bool = False
         self._source: Optional[abc.Playable] = None
-        # self._equalizer = Equalizer.flat()
-
+        self._equalizer = Equalizer.flat()
         self.queue = WaitQueue()
+        if guild is not MISSING:
+            self._guild = guild
+
+    def __repr__(self):
+        return f'<Player guild={self.guild}, channel={self.channel}, connected={self.is_connected()}, playing={self.is_playing()}, volume={self.volume}, node={self.node}>'
+    
+    def __eq__(self, other):
+        return other.__class__ == self.__class__ and self.id == other.id
+    
+    def __del__(self):
+        self.node.bot.loop.create_task(self.disconnect())
+        
+    @property
+    def equalizer(self):
+        """The currently applied Equalizer."""
+        return self._equalizer
+
+    @property
+    def eq(self):
+        """Alias to :func:`equalizer`."""
+        return self.equalizer
 
     @property
     def guild(self) -> discord.Guild:
         """The :class:`discord.Guild` this :class:`Player` is in."""
-        return self.channel.guild
+        return getattr(self.channel, 'guild', getattr(self, '_guild', None))
 
     @property
     def user(self) -> discord.ClientUser:
@@ -115,7 +139,7 @@ class Player(discord.VoiceProtocol):
         """The currently playing audio source."""
         return self._source
 
-    track = source
+    track: Optional[abc.Playable] = source
 
     @property
     def position(self) -> float:
@@ -171,14 +195,17 @@ class Player(discord.VoiceProtocol):
 
         logger.info(f"Connected to voice channel:: {self.channel.id}")
 
-    async def disconnect(self, *, force: bool) -> None:
+    async def disconnect(self, *, force: bool = False) -> None:
         try:
             logger.info(f"Disconnected from voice channel:: {self.channel.id}")
-
             await self.guild.change_voice_state(channel=None)
             self._connected = False
         finally:
-            self.node.players.remove(self)
+            try:
+                pass
+                # self.node.players.remove(self)
+            except ValueError:
+                pass
             self.cleanup()
 
     async def move_to(self, channel: discord.VoiceChannel) -> None:
@@ -324,3 +351,23 @@ class Player(discord.VoiceProtocol):
         await self.node._websocket.send(
             op="seek", guildId=str(self.guild.id), position=position
         )
+
+    async def set_eq(self, equalizer: Equalizer) -> None:
+        """|coro|
+        Set the Players Equalizer.
+        .. versionchanged:: 0.5.0
+            set_eq now accepts an :class:`Equalizer` instead of raw band/gain pairs.
+        Parameters
+        ------------
+        equalizer: :class:`Equalizer`
+            The Equalizer to set.
+        """
+        await self.node._websocket.send(op='filters', guildId=str(self.guild.id), bands=equalizer.eq)
+        self._equalizer = equalizer
+
+    async def set_equalizer(self, equalizer: Equalizer) -> None:
+        """|coro|
+        An alias to :func:`set_eq`.
+        """
+        await self.set_eq(equalizer)
+

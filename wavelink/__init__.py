@@ -31,8 +31,9 @@ __version__ = "{{__VERSION__}}"
 from .backoff import Backoff
 from .enums import *
 from .errors import *
-from .player import *
+from .eqs import *
 from .pool import *
+from .player import *
 from .stats import Stats
 from .tracks import *
 from .queue import *
