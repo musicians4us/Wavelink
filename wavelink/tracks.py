@@ -208,7 +208,7 @@ class YouTubeTrack(SearchableTrack):
     @property
     def thumbnail(self) -> str:
         """The URL to the thumbnail of this video."""
-        return f"https://img.youtube.com/vi/{self.identifier}/maxresdefault.jpg"
+        return f"https://img.youtube.com/vi/{self.identifier}/hqdefault.jpg"
 
     thumb = thumbnail
 
@@ -279,7 +279,9 @@ class PartialTrack(Searchable, Playable):
         self.title = query
         self._node = node
         self._cls = cls
-
+        self.length: MISSING = 0.0
+        self.is_stream: lambda: bool = None
+        
         if not issubclass(cls, SearchableTrack):
             raise TypeError(f"cls parameter must be of type {SearchableTrack!r} not {cls!r}")
 
